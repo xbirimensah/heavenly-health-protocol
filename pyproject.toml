@@ -13,7 +13,7 @@ authors = [{ name = "Heavenly Health Protocol contributors" }]
 keywords = ["health", "mcp", "cli", "privacy", "llm"]
 dependencies = [
   "cryptography>=49.0.0,<50",
-  "fastmcp>=3.4,<4",
+  "fastmcp>=3.4.5,<4",
   "httpx>=0.27,<1",
   "keyring>=25.7,<26",
   "mcp>=1.0,<2",
