@@ -401,6 +401,9 @@ class FakeHealthStore:
             "primary_action": {"kind": "maintain"},
         }
 
+    def weekly_coaching(self):
+        return {"status": "ready", "primary_focus": {"kind": "sleep_consistency"}}
+
     def sync_source(self, source, *, limit):
         return {"source": source, "deliveries_processed": 1, "events_upserted": 2, "limit": limit}
 
@@ -439,6 +442,7 @@ def test_storage_enabled_server_registers_real_tools_but_no_agent_approval_tool(
         "query_health_events",
         "health_daily_state",
         "health_daily_briefing",
+        "health_weekly_coaching",
         "propose_daily_briefing_feedback",
         "health_feedback_history",
         "health_event_provenance",

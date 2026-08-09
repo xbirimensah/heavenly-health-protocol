@@ -50,16 +50,17 @@ _DATA_TYPE_METRICS = {
     "daily-respiratory-rate": "respiratory_rate",
     "daily-vo2-max": "vo2_max",
     "sleep": "sleep_analysis",
+    "exercise": "workout_duration",
     "weight": "body_mass",
-    "vo2-max": "vo2_max",
-    "heart-rate-variability": "heart_rate_variability",
-    "steps": "steps",
     "distance": "walking_running_distance",
     "active-energy-burned": "active_energy",
+    "steps": "steps",
+    "vo2-max": "vo2_max",
+    "heart-rate-variability": "heart_rate_variability",
     "oxygen-saturation": "oxygen_saturation",
     "heart-rate": "heart_rate",
 }
-_INTERVAL_TYPES = frozenset({"steps", "distance", "active-energy-burned"})
+_INTERVAL_TYPES = frozenset({"steps", "distance", "active-energy-burned", "exercise"})
 _DAILY_TYPES = frozenset(
     {
         "daily-resting-heart-rate",
@@ -69,6 +70,11 @@ _DAILY_TYPES = frozenset(
         "daily-vo2-max",
     }
 )
+_PREFER_DAILY_SUMMARY = {
+    "heart-rate-variability": "daily-heart-rate-variability",
+    "oxygen-saturation": "daily-oxygen-saturation",
+    "vo2-max": "daily-vo2-max",
+}
 
 
 class GoogleHealthError(ProviderConfigurationError):
@@ -437,7 +443,7 @@ class GoogleHealthConnector:
         if not self.data_types:
             raise GoogleHealthError("No allowlisted metric maps to a Google Health data type")
 
-    def sync(self, *, days: int = 7, limit: int = 1000) -> dict[str, Any]:
+    def sync(self, *, days: int = 31, limit: int = 1000) -> dict[str, Any]:
         bounded_days = max(1, min(int(days), 31))
         bounded_limit = max(1, min(int(limit), 10_000))
         now = self._aware_now()
@@ -527,6 +533,7 @@ def scopes_for_metrics(allowed_metrics: frozenset[str]) -> tuple[str, ...]:
         "steps",
         "walking_running_distance",
         "active_energy",
+        "workout_duration",
         "vo2_max",
     }:
         scopes.append(GOOGLE_HEALTH_SCOPES[0])
@@ -547,10 +554,22 @@ def scopes_for_metrics(allowed_metrics: frozenset[str]) -> tuple[str, ...]:
 
 
 def data_types_for_metrics(allowed_metrics: frozenset[str]) -> tuple[str, ...]:
+    """Select one bounded Google Health source per metric.
+
+    Daily summaries provide the coaching-relevant value without letting dense
+    raw observations consume a shared sync budget.  Raw types remain available
+    only where Google Health has no daily equivalent.
+    """
+    preferred_daily = {
+        daily_type
+        for raw_type, daily_type in _PREFER_DAILY_SUMMARY.items()
+        if _DATA_TYPE_METRICS[raw_type] in allowed_metrics
+    }
     return tuple(
         data_type
         for data_type, metric in _DATA_TYPE_METRICS.items()
         if metric in allowed_metrics
+        and (data_type not in _PREFER_DAILY_SUMMARY or _PREFER_DAILY_SUMMARY[data_type] not in preferred_daily)
     )
 
 
@@ -651,6 +670,17 @@ def _metric_value(data_type: str, data: Mapping[str, Any]) -> tuple[float | int 
         duration = data.get("durationSeconds")
         numeric = _number(duration)
         return (round(float(numeric) / 60, 3), "min") if numeric is not None else (None, None)
+    if data_type == "exercise":
+        seconds = _duration_seconds(data.get("activeDuration"))
+        if seconds is not None:
+            return round(seconds / 60, 3), "min"
+        interval = data.get("interval")
+        if isinstance(interval, Mapping):
+            start = _physical_time(interval.get("startTime"))
+            end = _physical_time(interval.get("endTime"))
+            if start is not None and end is not None and end > start:
+                return round((end - start).total_seconds() / 60, 3), "min"
+        return None, None
     names, unit = candidates.get(data_type, ((), ""))
     for name in names:
         numeric = _number(data.get(name))
@@ -683,13 +713,18 @@ def _google_filter(data_type: str, start: str, end: str) -> str:
     if end_at <= start_at or end_at - start_at > timedelta(days=32):
         raise GoogleHealthError("Google Health sync window is invalid")
     snake = data_type.replace("-", "_")
-    if data_type in _DAILY_TYPES or data_type == "sleep":
+    if data_type in _DAILY_TYPES or data_type in {"sleep", "exercise"}:
         # Date filters use an exclusive upper bound; a window inside one civil day
         # must still span a whole day or the API rejects the empty range.
         start_date = start_at.date()
         end_date = end_at.date() if end_at == _midnight(end_at) else end_at.date() + timedelta(days=1)
         end_date = max(end_date, start_date + timedelta(days=1))
-        field = f"{snake}.date" if data_type in _DAILY_TYPES else "sleep.interval.civil_end_time"
+        if data_type in _DAILY_TYPES:
+            field = f"{snake}.date"
+        elif data_type == "sleep":
+            field = "sleep.interval.civil_end_time"
+        else:
+            field = "exercise.interval.civil_start_time"
         return f'{field} >= "{start_date.isoformat()}" AND {field} < "{end_date.isoformat()}"'
     field = "interval.start_time" if data_type in _INTERVAL_TYPES else "sample_time.physical_time"
     return f'{snake}.{field} >= "{_timestamp(start_at)}" AND {snake}.{field} < "{_timestamp(end_at)}"'
@@ -725,6 +760,16 @@ def _number(value: object) -> float | int | None:
     if not (float("-inf") < numeric < float("inf")):
         return None
     return int(numeric) if numeric.is_integer() else numeric
+
+
+def _duration_seconds(value: object) -> float | None:
+    if not isinstance(value, str):
+        return None
+    matched = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)s", value.strip())
+    if matched is None:
+        return None
+    seconds = float(matched.group(1))
+    return seconds if 0 <= seconds < float("inf") else None
 
 
 def _date_timestamp(value: object) -> str | None:

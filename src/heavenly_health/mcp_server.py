@@ -303,6 +303,11 @@ def _register_protocol_tools(
         """Return a delivery-ready action, evidence, freshness, and feedback options."""
         return health_store.daily_briefing()
 
+    @server.tool(name="health_weekly_coaching")
+    def _health_weekly_coaching() -> dict[str, Any]:
+        """Return a bounded, evidence-led weekly health coaching report and coverage gaps."""
+        return health_store.weekly_coaching()
+
     @server.tool(name="propose_daily_briefing_feedback")
     def _propose_daily_briefing_feedback(feedback: str) -> dict[str, Any]:
         """Stage one owner-reported outcome; only local CLI approval makes it learnable."""

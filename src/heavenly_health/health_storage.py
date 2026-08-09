@@ -18,6 +18,7 @@ import httpx
 
 from heavenly_health.daily_briefing import build_daily_briefing
 from heavenly_health.daily_state import DAILY_STATE_METRICS, evaluate_daily_state
+from heavenly_health.weekly_coaching import WEEKLY_COACHING_METRICS, build_weekly_coaching
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 _FILTER_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
@@ -25,6 +26,8 @@ _SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
 _MAX_QUERY_DAYS = 31
 _MAX_QUERY_RESULTS = 200
 _MAX_SYNC_DELIVERIES = 100
+_MAX_AGGREGATE_EVENTS = 10_000
+_AGGREGATE_PAGE_SIZE = 1_000
 _PROVIDER_SOURCES = frozenset({"google_health", "garmin", "whoop", "oura"})
 _PROVIDER_RESOURCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _PROVIDER_RECORD_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:_.-]{0,511}$")
@@ -235,17 +238,68 @@ class SupabaseHealthStore:
         reference = self._clock()
         if not selected_metrics:
             return evaluate_daily_state([], now=reference)
-        events = self.query_events(
-            start=_format_timestamp(reference - timedelta(days=30)),
-            end=_format_timestamp(reference),
+        events = self._aggregate_events(
+            start=reference - timedelta(days=30),
+            end=reference,
             metrics=selected_metrics,
-            limit=200,
-        )["events"]
-        return evaluate_daily_state(events if isinstance(events, list) else [], now=reference)
+        )
+        return evaluate_daily_state(events, now=reference)
 
     def daily_briefing(self) -> dict[str, object]:
         """Build the delivery-ready, non-diagnostic briefing from the daily state."""
         return build_daily_briefing(self.daily_state(), now=self._clock())
+
+    def weekly_coaching(self) -> dict[str, Any]:
+        """Build a bounded, evidence-led seven-day coaching report.
+
+        Aggregation happens locally so the MCP response contains a compact report,
+        not thousands of raw high-frequency samples.
+        """
+        reference = self._clock()
+        selected_metrics = tuple(
+            sorted(set(WEEKLY_COACHING_METRICS) & set(self.settings.allowed_metrics))
+        )
+        if not selected_metrics:
+            return build_weekly_coaching([], now=reference)
+        rows = self._aggregate_events(
+            start=reference - timedelta(days=7),
+            end=reference,
+            metrics=selected_metrics,
+        )
+        return build_weekly_coaching(rows, now=reference)
+
+    def _aggregate_events(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        metrics: Sequence[str],
+    ) -> list[Mapping[str, Any]]:
+        """Read a bounded internal analysis window without returning raw samples to MCP."""
+        events: list[Mapping[str, Any]] = []
+        for offset in range(0, _MAX_AGGREGATE_EVENTS, _AGGREGATE_PAGE_SIZE):
+            rows = self._request_json(
+                "GET",
+                self.settings.health_table,
+                params={
+                    "select": "metric_type,event_at,value_numeric",
+                    "is_synthetic": "eq.false",
+                    "metric_type": _in_filter(metrics),
+                    "and": (
+                        f"(event_at.gte.{_format_timestamp(start)},"
+                        f"event_at.lte.{_format_timestamp(end)})"
+                    ),
+                    "order": "event_at.asc,id.asc",
+                    "limit": str(_AGGREGATE_PAGE_SIZE),
+                    "offset": str(offset),
+                },
+            )
+            if not isinstance(rows, list):
+                raise HealthStorageError("Supabase returned an unexpected aggregate health response")
+            events.extend(row for row in rows if isinstance(row, Mapping))
+            if len(rows) < _AGGREGATE_PAGE_SIZE:
+                break
+        return events
 
     def available_metrics(self) -> dict[str, Any]:
         rows = self._request_json(
