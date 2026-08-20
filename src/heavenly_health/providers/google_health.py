@@ -71,7 +71,8 @@ _DAILY_TYPES = frozenset(
     }
 )
 _PREFER_DAILY_SUMMARY = {
-    "heart-rate-variability": "daily-heart-rate-variability",
+    # HRV raw samples are kept alongside daily summaries for resilience
+    # when the wearable fails to produce a daily aggregate on some nights.
     "oxygen-saturation": "daily-oxygen-saturation",
     "vo2-max": "daily-vo2-max",
 }
