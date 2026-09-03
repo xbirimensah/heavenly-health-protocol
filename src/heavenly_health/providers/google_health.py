@@ -52,11 +52,13 @@ _DATA_TYPE_METRICS = {
     "sleep": "sleep_analysis",
     "exercise": "workout_duration",
     "weight": "body_mass",
+    # Keep raw HRV with low-volume recovery observations: it complements the
+    # daily summary when a wearable omits an aggregate for a night.
+    "heart-rate-variability": "heart_rate_variability",
     "distance": "walking_running_distance",
     "active-energy-burned": "active_energy",
     "steps": "steps",
     "vo2-max": "vo2_max",
-    "heart-rate-variability": "heart_rate_variability",
     "oxygen-saturation": "oxygen_saturation",
     "heart-rate": "heart_rate",
 }

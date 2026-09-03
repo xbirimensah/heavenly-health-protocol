@@ -124,7 +124,17 @@ def test_query_health_events_enforces_allowlist_date_bounds_and_result_limit() -
     assert request.url.params["metric_type"] == "in.(steps)"
     assert request.url.params["source"] == "in.(health_auto_export)"
     assert request.url.params["limit"] == "200"
+    assert request.url.params["order"] == "event_at.asc"
     assert request.headers["apikey"] == "private-test-service-role-key"
+
+    latest = store.query_events(
+        start="2026-07-13T00:00:00Z",
+        end="2026-07-15T00:00:00Z",
+        metrics=["steps"],
+        newest_first=True,
+    )
+    assert latest["count"] == 1
+    assert requests[-1].url.params["order"] == "event_at.desc"
 
     with pytest.raises(HealthStorageError, match="not allowed"):
         store.query_events(

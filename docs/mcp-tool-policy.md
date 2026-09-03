@@ -24,6 +24,7 @@ health_available_metrics
 query_health_events
 health_daily_state            # explainable recovery band + one action; never diagnoses
 health_daily_briefing         # delivery-ready action, evidence, freshness, uncertainty, feedback choices
+health_weekly_coaching        # bounded seven-day coaching and coverage gaps
 health_feedback_history       # compact outcomes only after local owner approval
 health_event_provenance
 search_personal_context          # only when an explicit context relation exists

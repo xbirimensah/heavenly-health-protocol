@@ -202,6 +202,7 @@ class SupabaseHealthStore:
         metrics: Sequence[str],
         sources: Sequence[str] | None = None,
         limit: int = 100,
+        newest_first: bool = False,
     ) -> dict[str, Any]:
         start_at = _parse_timestamp("start", start)
         end_at = _parse_timestamp("end", end)
@@ -222,7 +223,7 @@ class SupabaseHealthStore:
                 f"(event_at.gte.{_format_timestamp(start_at)},"
                 f"event_at.lte.{_format_timestamp(end_at)})"
             ),
-            "order": "event_at.asc",
+            "order": "event_at.desc" if newest_first else "event_at.asc",
             "limit": str(max(1, min(int(limit), _MAX_QUERY_RESULTS))),
         }
         if selected_sources:
