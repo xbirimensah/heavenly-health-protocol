@@ -175,16 +175,7 @@ def test_connector_status_reports_real_freshness_without_returning_health_values
     assert result == {
         "storage": "supabase",
         "credential_scope": "service_role",
-        "configured_connectors": [
-            {
-                "source": "health_auto_export",
-                "mode": "push-delivery-with-bounded-normalization",
-                "sync_supported": True,
-                "latest_event_at": "2026-07-14T05:30:00Z",
-                "last_received_at": "2026-07-14T05:35:00Z",
-                "freshness": "fresh",
-            }
-        ],
+        "configured_connectors": [],
     }
     assert "value_numeric" not in json.dumps(result)
 

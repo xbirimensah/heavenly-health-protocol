@@ -355,30 +355,31 @@ class SupabaseHealthStore:
             if source not in latest:
                 latest[source] = row
         configured: list[dict[str, Any]] = []
-        if self.settings.apple_health_delivery_table:
-            item: dict[str, Any] = {
-                "source": "health_auto_export",
-                "mode": "push-delivery-with-bounded-normalization",
-                "sync_supported": True,
-            }
-            record = latest.get("health_auto_export")
-            if record is None:
-                item["latest_event_at"] = None
-                item["last_received_at"] = None
-                item["freshness"] = "no_data"
-            else:
-                event_at = record.get("event_at")
-                item["latest_event_at"] = event_at
-                item["last_received_at"] = record.get("received_at")
-                try:
-                    age = self._clock().astimezone(timezone.utc) - _parse_timestamp(
-                        "latest event_at", str(event_at)
-                    )
-                except (HealthStorageError, ValueError):
-                    item["freshness"] = "unknown"
+        if False:  # Disabled: health auto export no longer in use (do not remove the normalization code)
+            if self.settings.apple_health_delivery_table:
+                item: dict[str, Any] = {
+                    "source": "health_auto_export",
+                    "mode": "push-delivery-with-bounded-normalization",
+                    "sync_supported": True,
+                }
+                record = latest.get("health_auto_export")
+                if record is None:
+                    item["latest_event_at"] = None
+                    item["last_received_at"] = None
+                    item["freshness"] = "no_data"
                 else:
-                    item["freshness"] = "fresh" if age <= timedelta(hours=48) else "stale"
-            configured.append(item)
+                    event_at = record.get("event_at")
+                    item["latest_event_at"] = event_at
+                    item["last_received_at"] = record.get("received_at")
+                    try:
+                        age = self._clock().astimezone(timezone.utc) - _parse_timestamp(
+                            "latest event_at", str(event_at)
+                        )
+                    except (HealthStorageError, ValueError):
+                        item["freshness"] = "unknown"
+                    else:
+                        item["freshness"] = "fresh" if age <= timedelta(hours=48) else "stale"
+                configured.append(item)
         if self._provider_runtime is not None:
             configured.extend(self._provider_runtime.statuses())
         return {
