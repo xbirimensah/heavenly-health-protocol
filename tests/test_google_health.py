@@ -453,8 +453,8 @@ def test_google_sleep_normalization_and_metric_scope_selection() -> None:
         allowed_metrics=frozenset({"sleep_analysis"}),
     )
 
-    assert events[0]["value_numeric"] == 480
-    assert events[0]["unit"] == "min"
+    assert events[0]["value_numeric"] == 8.0
+    assert events[0]["unit"] == "h"
     assert normalize_google_data_point("sleep", {}, allowed_metrics=frozenset({"steps"})) == []
 
 

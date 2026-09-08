@@ -73,7 +73,6 @@ _DAILY_TYPES = frozenset(
     }
 )
 _PREFER_DAILY_SUMMARY = {
-    "heart-rate-variability": "daily-heart-rate-variability",
     "oxygen-saturation": "daily-oxygen-saturation",
     "vo2-max": "daily-vo2-max",
 }
