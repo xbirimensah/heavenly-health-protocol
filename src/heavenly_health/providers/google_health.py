@@ -73,8 +73,7 @@ _DAILY_TYPES = frozenset(
     }
 )
 _PREFER_DAILY_SUMMARY = {
-    # HRV raw samples are kept alongside daily summaries for resilience
-    # when the wearable fails to produce a daily aggregate on some nights.
+    "heart-rate-variability": "daily-heart-rate-variability",
     "oxygen-saturation": "daily-oxygen-saturation",
     "vo2-max": "daily-vo2-max",
 }
@@ -669,10 +668,18 @@ def _metric_value(data_type: str, data: Mapping[str, Any]) -> tuple[float | int 
             start = _physical_time(interval.get("startTime"))
             end = _physical_time(interval.get("endTime"))
             if start is not None and end is not None and end > start:
-                return round((end - start).total_seconds() / 60, 3), "min"
+                minutes = round((end - start).total_seconds() / 60, 3)
+                if minutes > 60:
+                    return round(minutes / 60, 2), "h"
+                return minutes, "min"
         duration = data.get("durationSeconds")
         numeric = _number(duration)
-        return (round(float(numeric) / 60, 3), "min") if numeric is not None else (None, None)
+        if numeric is not None:
+            minutes = round(float(numeric) / 60, 3)
+            if minutes > 60:
+                return round(minutes / 60, 2), "h"
+            return minutes, "min"
+        return None, None
     if data_type == "exercise":
         seconds = _duration_seconds(data.get("activeDuration"))
         if seconds is not None:
