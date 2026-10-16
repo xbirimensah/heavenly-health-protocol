@@ -19,7 +19,7 @@ dependencies = [
   "mcp>=1.0,<2",
   "PyJWT[crypto]>=2.10,<3",
   "py-key-value-aio[filetree]>=0.4.5,<1",
-  "rich>=13.9,<14",
+  "rich>=15.0.0,<16",
   "typer>=0.12,<1",
 ]
 
